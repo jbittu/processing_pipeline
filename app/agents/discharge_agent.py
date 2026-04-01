@@ -3,6 +3,7 @@ from app.services.llm_service import get_llm
 from app.services.pdf_service import PageImage
 from app.models.schemas import DischargeSummaryInfo
 from app.utils.helpers import safe_parse_json
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 EXTRACTION_PROMPT = """You are a medical document data extractor.
 You are given page(s) from a hospital discharge summary.
@@ -30,6 +31,10 @@ class DischargeSummaryAgent:
     def __init__(self):
         self.llm = get_llm(temperature=0.0)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+    )
     def extract(self, pages: list[PageImage]) -> DischargeSummaryInfo:
         if not pages:
             return DischargeSummaryInfo()

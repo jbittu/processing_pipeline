@@ -2,6 +2,7 @@ from langchain_core.messages import HumanMessage
 from app.services.llm_service import get_llm
 from app.services.pdf_service import PageImage
 from app.utils.helpers import safe_parse_json
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 DOCUMENT_TYPES = [
     "claim_forms",
@@ -44,6 +45,10 @@ class SegregatorAgent:
     def __init__(self):
         self.llm = get_llm(temperature=0.0)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+    )
     def classify_page(self, page: PageImage) -> dict:
         """Classify a single page image."""
         message = HumanMessage(
