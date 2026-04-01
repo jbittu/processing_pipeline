@@ -41,18 +41,28 @@ class ItemizedBillAgent:
         if not pages:
             return ItemizedBillInfo()
 
-        content = [{"type": "text", "text": EXTRACTION_PROMPT}]
+        final_data = {"items": []}
         for page in pages:
-            content.append(
+            content = [
+                {"type": "text", "text": EXTRACTION_PROMPT},
                 {
                     "type": "image_url",
                     "image_url": {
                         "url": f"data:image/png;base64,{page.base64_image}",
                     },
                 }
-            )
+            ]
+            message = HumanMessage(content=content)
+            response = self.llm.invoke([message])
+            data = safe_parse_json(response.content)
+            
+            for k, v in data.items():
+                if k == "items" and isinstance(v, list):
+                    final_data["items"].extend(v)
+                elif v and (k not in final_data or final_data.get(k) is None):
+                    final_data[k] = v
+                # Prioritize financial totals from the LAST page (they usually span till the end)
+                elif v and k in ['subtotal', 'tax', 'discount', 'total_amount'] and isinstance(v, (int, float)):
+                    final_data[k] = v
 
-        message = HumanMessage(content=content)
-        response = self.llm.invoke([message])
-        data = safe_parse_json(response.content)
-        return ItemizedBillInfo(**data)
+        return ItemizedBillInfo(**final_data)

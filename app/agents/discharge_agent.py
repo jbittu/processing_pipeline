@@ -34,18 +34,31 @@ class DischargeSummaryAgent:
         if not pages:
             return DischargeSummaryInfo()
 
-        content = [{"type": "text", "text": EXTRACTION_PROMPT}]
+        final_data = {}
         for page in pages:
-            content.append(
+            content = [
+                {"type": "text", "text": EXTRACTION_PROMPT},
                 {
                     "type": "image_url",
                     "image_url": {
                         "url": f"data:image/png;base64,{page.base64_image}",
                     },
                 }
-            )
+            ]
+            message = HumanMessage(content=content)
+            response = self.llm.invoke([message])
+            data = safe_parse_json(response.content)
 
-        message = HumanMessage(content=content)
-        response = self.llm.invoke([message])
-        data = safe_parse_json(response.content)
-        return DischargeSummaryInfo(**data)
+            for k, v in data.items():
+                if isinstance(v, list):
+                    final_data.setdefault(k, []).extend(v)
+                elif v and not final_data.get(k):
+                    final_data[k] = v
+
+        # Deduplicate list elements just in case multiple pages repeat the same diagnosis
+        for list_key in ['diagnosis', 'procedures_performed']:
+            if list_key in final_data and isinstance(final_data[list_key], list):
+                # Using dict.fromkeys to keep insertion order but remove duplicates
+                final_data[list_key] = list(dict.fromkeys(final_data[list_key]))
+
+        return DischargeSummaryInfo(**final_data)

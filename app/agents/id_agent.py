@@ -35,18 +35,23 @@ class IDAgent:
         if not pages:
             return IdentityInfo()
 
-        content = [{"type": "text", "text": EXTRACTION_PROMPT}]
+        final_data = {}
         for page in pages:
-            content.append(
+            content = [
+                {"type": "text", "text": EXTRACTION_PROMPT},
                 {
                     "type": "image_url",
                     "image_url": {
                         "url": f"data:image/png;base64,{page.base64_image}",
                     },
                 }
-            )
+            ]
+            message = HumanMessage(content=content)
+            response = self.llm.invoke([message])
+            data = safe_parse_json(response.content)
+            
+            for k, v in data.items():
+                if v and not final_data.get(k):
+                    final_data[k] = v
 
-        message = HumanMessage(content=content)
-        response = self.llm.invoke([message])
-        data = safe_parse_json(response.content)
-        return IdentityInfo(**data)
+        return IdentityInfo(**final_data)
